@@ -5,9 +5,11 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 import numpy as np
 import os
 import keras
+import cv2
 
 app = Flask(__name__)
 CORS(app, resources={r"/upload": {"origins": "http://localhost:4200"}})
+
 @app.after_request
 def after_request(response):
     response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
@@ -26,10 +28,10 @@ model = load_model(MODEL_PATH)
 
 # Preprocess the image to match the model input
 def preprocess_image(image_path):
-    image = load_img(image_path, target_size=(200, 200))  # Resize to match your model
+    image = load_img(image_path, target_size=(200, 200))
     image = img_to_array(image)
-    image = np.expand_dims(image, axis=0)  # Add batch dimension
-    image = image / 255.0  # Normalize
+    image = np.expand_dims(image, axis=0)
+    image = image / 255.0 
     return image
 
 # API endpoint to handle image upload and prediction
@@ -41,15 +43,27 @@ def upload():
     file = request.files['file']
     file_path = os.path.join('uploads', file.filename)
     file.save(file_path)
-
+    try: 
     # Preprocess and predict
-    processed_image = preprocess_image(file_path)
-    prediction = model.predict(processed_image)
-    os.remove(file_path)  # Clean up the saved file
+        processed_image = preprocess_image(file_path)
+        prediction = model.predict(processed_image)
+        predicted_class = np.argmax(prediction)
+        os.remove(file_path) 
 
-    # Return the prediction result
-    result = 'TUBERCULOSIS' if prediction[0][0] > 0.5 else 'HEALTHY'
-    return jsonify({'prediction': result})
+        if predicted_class == 1:
+            result = 'TUBERCULOSIS'
+        elif predicted_class == 0:
+            result = 'HEALTHY'
+    # Ensure the logic matches your model's encoding
+    #result = 'HEALTHY' if prediction[0][0] > 0.7 else 'TUBERCULOSIS'
+    
+    # Return the result as a JSON response
+        return jsonify({'prediction': result})
+    except Exception as e:
+        os.remove(file_path)
+        return jsonify({'error': str (e)}), 500
+
+
 
 if __name__ == '__main__':
     os.makedirs('uploads', exist_ok=True)  # Create an uploads folder
